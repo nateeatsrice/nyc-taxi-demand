@@ -1,0 +1,48 @@
+name: train
+
+# Manually triggered training run. Separate from CD on purpose -- training is
+# expensive and should be deliberate, not fire on every merge.
+on:
+  workflow_dispatch:
+    inputs:
+      year:
+        description: "Limit to a single year partition (blank = all)"
+        required: false
+        default: ""
+      promote:
+        description: "Promote best run to Production"
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.12"
+
+      - name: Install deps (core + orchestration)
+        run: uv pip install --system -e ".[orchestration]"
+
+      - name: Submit training flow to AWS Batch
+        env:
+          NTD_REGION: ${{ vars.AWS_REGION }}
+        run: |
+          ARGS="run --with batch"
+          if [ -n "${{ github.event.inputs.year }}" ]; then ARGS="$ARGS --year ${{ github.event.inputs.year }}"; fi
+          ARGS="$ARGS --promote ${{ github.event.inputs.promote }}"
+          python flows/training_flow.py $ARGS

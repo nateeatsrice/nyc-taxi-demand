@@ -1,0 +1,52 @@
+name: cd
+
+on:
+  push:
+    branches: [main]
+
+# TODO(you): configure GitHub OIDC -> AWS, and set these repo secrets/vars:
+#   secrets.AWS_DEPLOY_ROLE_ARN  (role GitHub assumes via OIDC)
+#   vars.AWS_REGION, vars.ECR_REPO_URL, vars.EKS_CLUSTER_NAME
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push API image
+        run: |
+          docker build -f docker/api.Dockerfile -t ${{ vars.ECR_REPO_URL }}:api-${{ github.sha }} .
+          docker push ${{ vars.ECR_REPO_URL }}:api-${{ github.sha }}
+
+      - name: Build & push UI image
+        run: |
+          docker build -f docker/ui.Dockerfile -t ${{ vars.ECR_REPO_URL }}:ui-${{ github.sha }} .
+          docker push ${{ vars.ECR_REPO_URL }}:ui-${{ github.sha }}
+
+      - name: Build & push training image
+        run: |
+          docker build -f docker/training.Dockerfile -t ${{ vars.ECR_REPO_URL }}:train-${{ github.sha }} .
+          docker push ${{ vars.ECR_REPO_URL }}:train-${{ github.sha }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region ${{ vars.AWS_REGION }} --name ${{ vars.EKS_CLUSTER_NAME }}
+
+      - name: Deploy to EKS
+        run: |
+          kubectl set image deployment/ntd-api api=${{ vars.ECR_REPO_URL }}:api-${{ github.sha }}
+          kubectl set image deployment/ntd-ui  ui=${{ vars.ECR_REPO_URL }}:ui-${{ github.sha }}
+          kubectl rollout status deployment/ntd-api --timeout=180s
+          kubectl rollout status deployment/ntd-ui --timeout=180s

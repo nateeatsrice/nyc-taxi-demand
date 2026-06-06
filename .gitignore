@@ -34,20 +34,3 @@ crash.log
 .DS_Store
 .idea/
 .vscode/
-
-# Keep the lockfile tracked, ignore stray uv caches
-.uv/
-
-# Terraform lock file: COMMIT this one (don't ignore) — it pins provider versions
-# .terraform.lock.hcl   <- leave tracked
-
-# Docker
-*.log
-
-# Batch prediction / report outputs if ever written locally
-batch-predictions/
-monitoring/local/
-
-# Jupyter, if you add exploration notebooks
-.ipynb_checkpoints/
-*.ipynb_checkpoints
