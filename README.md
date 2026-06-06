@@ -5,8 +5,8 @@ An **MLOps platform** that consumes the gold feature tables produced by a separa
 monitored **hourly taxi-demand forecasting** model.
 
 This repo is the *consumer* in a two-project platform. It does **not** ingest raw
-data or own the data lake — it reads the curated gold tables, trains and compares
-several models, promotes the best to a registry, serves it behind an API + UI, and
+data or own the data lake — it reads the curated gold tables, runs a hyperparameter
+search across many models, promotes the best to a registry, serves it behind an API + UI, and
 monitors it. Compute is ephemeral and scales to zero; data, artifacts, and history
 are persistent in S3 and survive `terraform destroy`.
 
@@ -27,8 +27,8 @@ are persistent in S3 and survive `terraform destroy`.
 │                                                                                             │
 │  data/        load gold + join weather by date → temporal split → snapshot descriptor      │
 │  features/    SHARED transform (leakage-free, pre-knowable only)  ◄── imported by BOTH ──┐  │
-│  training/    XGBoost · LightGBM · HistGradientBoosting → MLflow (file/SQLite→S3) + SHAP │  │
-│  registry/    promote best: None → Staging → Production  (MLflow legacy stage API)       │  │
+│  training/    10 models × Optuna search (50 trials ea) → MLflow, one exp per model + SHAP│  │
+│  registry/    promote global best: None → Staging → Production (MLflow legacy stage API) │  │
 │  serving/     FastAPI (loads Production model) + Streamlit UI  ──────────────────────────┘  │
 │  inference/   batch predict all zones, pre-knowable features only → S3                       │
 │  monitoring/  CloudWatch (infra/app) + Evidently drift reports → S3                          │
@@ -90,6 +90,30 @@ dates) — never a random shuffle, which would leak future days into training. T
 **batch-inference path constructs rows from pre-knowable inputs alone**, which is the
 practical proof the feature design is leakage-free. See `docs/leakage.md`.
 
+## Model search & selection
+
+Rather than fitting a handful of models once with hardcoded hyperparameters, the
+training layer runs an **Optuna study per model** (50 trials each by default) and
+promotes the single best run across all of them. Ten models are searched across
+three families:
+
+- **Tree (Poisson objective):** XGBoost, LightGBM, HistGradientBoosting
+- **Linear:** PoissonRegressor (GLM), Ridge, Lasso, ElasticNet, LinearRegression
+- **Other:** RandomForest, SVR (excluded from the default set — slow on ~145k rows)
+
+Each model gets its **own MLflow experiment** (`nyc-taxi-demand-<model>`), so the UI
+shows one experiment per model with its trials as runs. Trip counts are non-negative
+event counts, so the tree models and the Poisson GLM use a **Poisson objective** and
+cannot predict negatives; OLS and SVR remain squared-error baselines (the serving
+layer clamps at 0). Polynomial expansion is a `poly_degree` hyperparameter on the
+linear models, not a separate estimator. See `docs/model-search.md`.
+
+```bash
+make train                                  # all default models, 50 trials each
+make train MODELS=xgboost,ridge TRIALS=100  # a subset, more trials
+make list-models                            # see all options
+```
+
 ## Train/serve consistency
 
 A single shared module (`features/transform.py`) is imported by **both** training and
@@ -105,19 +129,23 @@ path exactly. See `docs/train-serve-consistency.md`.
 ```bash
 make setup        # uv venv + core (laptop-safe) deps + dev tools + pre-commit
 make test         # run the test suite
-make train        # train + compare locally (MLflow file store), promote best
+make train        # Optuna search across 10 models, promote global best
+make list-models  # see the models the train target can search
 make mlflow-ui    # sync MLflow store from S3 and open the UI
 make serve-api    # run FastAPI locally against the Production model
-make serve-ui     # run the Streamlit UI
+make serve-ui     # run the Streamlit UI (install the serve extra first)
 ```
 
-See `docs/build-plan.md` for the full phased build/debug checklist.
+Local serving needs the serve extra once: `uv pip install -e ".[serve]"`.
+See `docs/build-plan.md` for the full phased build/debug checklist and
+`docs/model-search.md` for the tuning design.
 
 ## Dependency policy
 
 Local dev runs on an **Intel Mac on macOS 11 (Big Sur)**; all *local* deps are pinned
 to versions with prebuilt Big Sur Intel wheels (no source builds). Cloud/Linux-only
 deps (Streamlit serving, Metaflow, Evidently) live in optional-dependency groups
+(Optuna and the ML stack are laptop-safe core deps)
 installed only in Docker/CI. MLflow is pinned `>=2.9,<3` because this repo
 intentionally uses the legacy stage-based registry API. Details and pin ceilings:
 `docs/dependency-pins.md`.

@@ -24,6 +24,8 @@ class TrainingFlow(FlowSpec):
     year = Parameter("year", help="Limit to a single year partition", default=None)
     val_fraction = Parameter("val_fraction", default=0.2)
     do_promote = Parameter("promote", default=True)
+    models = Parameter("models", help="Comma-separated models (default: all but svr)", default=None)
+    trials = Parameter("trials", help="Optuna trials per model", default=50)
 
     @step
     def start(self):
@@ -41,12 +43,18 @@ class TrainingFlow(FlowSpec):
     )
     @step
     def train(self):
-        """Train + compare all algorithms on AWS Batch (spot)."""
+        """Tune all models with Optuna on AWS Batch (spot)."""
         from nyc_taxi_demand.training.train import train_and_compare
 
-        results = train_and_compare(year=self.year, val_fraction=self.val_fraction)
-        self.results = [r.__dict__ for r in results]
-        self.best = self.results[0]
+        model_list = [m.strip() for m in self.models.split(",")] if self.models else None
+        summary = train_and_compare(
+            models=model_list,
+            n_trials=self.trials,
+            year=self.year,
+            val_fraction=self.val_fraction,
+        )
+        self.results = [r.__dict__ for r in summary.results]
+        self.best = summary.best.__dict__
         self.next(self.register)
 
     @step
@@ -62,7 +70,7 @@ class TrainingFlow(FlowSpec):
 
     @step
     def end(self):
-        print(f"Best: {self.best['algorithm']} rmse={self.best['rmse']:.3f}")
+        print(f"Best: {self.best['model']} rmse={self.best['rmse']:.3f}")
         print(f"Promotion: {self.promotion}")
 
 

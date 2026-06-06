@@ -41,12 +41,16 @@ test-cov: ## Run tests with coverage report
 	pytest -q --cov=nyc_taxi_demand --cov-report=term-missing
 
 ##@ Training & MLflow
-.PHONY: train train-batch mlflow-ui promote
-train: ## Train + compare locally (MLflow file store), promote best
-	$(PY) -m nyc_taxi_demand.cli train
+.PHONY: train train-batch list-models mlflow-ui promote
+train: ## Tune models with Optuna + promote best. Opts: MODELS=xgboost,ridge TRIALS=50
+	uv run python -m nyc_taxi_demand.cli train \
+		$(if $(MODELS),--models $(MODELS),) $(if $(TRIALS),--trials $(TRIALS),)
 
-train-batch: ## Submit training to AWS Batch (spot) via Metaflow
-	$(PY) flows/training_flow.py run --with batch
+list-models: ## List available models for the train target
+	uv run python -m nyc_taxi_demand.cli list-models
+
+train-batch: ## Submit tuning to AWS Batch (spot) via Metaflow
+	uv run python flows/training_flow.py run --with batch
 
 mlflow-ui: ## Sync MLflow store from S3 and launch the UI locally
 	@mkdir -p .mlflow
@@ -61,10 +65,10 @@ promote: ## Promote a specific run: make promote RUN_ID=<id> RMSE=<val>
 ##@ Serving (local)
 .PHONY: serve-api serve-ui
 serve-api: ## Run FastAPI locally against the Production model
-	uvicorn nyc_taxi_demand.serving.api.main:app --reload --port 8000
+	uv run uvicorn nyc_taxi_demand.serving.api.main:app --reload --port 8000
 
 serve-ui: ## Run the Streamlit UI locally (expects API on :8000)
-	streamlit run src/nyc_taxi_demand/serving/ui/app.py
+	uv run streamlit run src/nyc_taxi_demand/serving/ui/app.py
 
 ##@ Inference & Monitoring
 .PHONY: batch-infer monitor
