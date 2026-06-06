@@ -16,23 +16,49 @@ app = typer.Typer(help="nyc-taxi-demand MLOps CLI", no_args_is_help=True)
 
 @app.command()
 def train(
+    models: str = typer.Option(
+        None,
+        help="Comma-separated models to tune (default: all except svr). "
+        "E.g. --models xgboost,ridge,random_forest. Use `list-models` to see options.",
+    ),
+    trials: int = typer.Option(50, help="Optuna trials per model."),
     year: int = typer.Option(None, help="Limit to a single year partition (lighter local runs)."),
     val_fraction: float = typer.Option(0.2, help="Temporal validation fraction."),
-    promote: bool = typer.Option(True, help="Register + promote the best run after training."),
+    promote: bool = typer.Option(True, help="Register + promote the global best run."),
 ) -> None:
-    """Train + compare all algorithms; optionally promote the best."""
+    """Tune each model with Optuna (one experiment per model); promote the best."""
     from nyc_taxi_demand.registry.promote import promote_best_run
     from nyc_taxi_demand.training.train import train_and_compare
 
-    results = train_and_compare(year=year, val_fraction=val_fraction)
-    rprint("[bold]Results (best first):[/bold]")
-    for r in results:
-        rprint(f"  {r.algorithm:<24} rmse={r.rmse:.3f}  mae={r.mae:.3f}  r2={r.r2:.3f}")
+    model_list = [m.strip() for m in models.split(",")] if models else None
+    summary = train_and_compare(
+        models=model_list, n_trials=trials, year=year, val_fraction=val_fraction
+    )
+
+    rprint(
+        f"[bold]Results across {len(summary.results)} models "
+        f"({trials} trials each), best first:[/bold]"
+    )
+    for r in summary.results:
+        marker = "[green]*[/green]" if r is summary.best else " "
+        rprint(f"  {marker} {r.model:<24} rmse={r.rmse:.3f}  mae={r.mae:.3f}  r2={r.r2:.3f}")
 
     if promote:
-        best = results[0]
+        best = summary.best
         outcome = promote_best_run(best.run_id, best.rmse)
-        rprint(f"[green]Promoted[/green] {outcome}")
+        rprint(f"[green]Promoted[/green] {best.model}: {outcome}")
+
+
+@app.command("list-models")
+def list_models() -> None:
+    """List available models and their families."""
+    from nyc_taxi_demand.training.algorithms import DEFAULT_MODELS, MODELS
+
+    rprint("[bold]Available models:[/bold]")
+    for name, spec in MODELS.items():
+        default = "" if name in DEFAULT_MODELS else " [dim](not in default set)[/dim]"
+        poisson = "poisson" if spec.poisson else "squared-error"
+        rprint(f"  {name:<24} family={spec.family:<7} {poisson}{default}")
 
 
 @app.command("batch-infer")
