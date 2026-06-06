@@ -1,0 +1,126 @@
+[project]
+name = "nyc-taxi-demand"
+version = "0.1.0"
+description = "MLOps platform: hourly NYC taxi demand forecasting, consuming gold tables from the data-pipeline platform."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+
+# ---------------------------------------------------------------------------
+# LAPTOP-SAFE CORE DEPENDENCIES
+# ---------------------------------------------------------------------------
+# These install + run on an Intel Mac on macOS 11 (Big Sur). Every pin below
+# is chosen to resolve to a PREBUILT wheel for macosx_11_0_x86_64 /
+# macosx_10_9_x86_64 / universal2 -- NO source builds on the laptop.
+#
+# The hard ceilings are driven by numpy/scipy: SciPy 1.13+ dropped old-macOS
+# Intel wheels, which transitively caps scikit-learn. See docs/dependency-pins.md
+# for the full rationale and how to verify a pin before bumping it.
+#
+# MLflow is pinned <3 ON PURPOSE: this repo uses the legacy stage-based registry
+# API (None/Staging/Production). Stages are deprecated in 2.9 but fully work
+# through all of 2.x; they are only removed in 3.x.
+# ---------------------------------------------------------------------------
+dependencies = [
+    # --- numerical core (the binding constraint for Big Sur Intel) ---
+    "numpy>=1.26,<2.0",
+    "scipy>=1.11,<1.13",
+    "pandas>=2.1,<2.3",
+    "pyarrow>=14,<16",
+    # --- ML frameworks (all ship Big Sur Intel wheels at these pins) ---
+    "scikit-learn>=1.4,<1.5",
+    "xgboost>=2.0,<2.1",
+    "lightgbm>=4.1,<4.4",
+    "shap>=0.44,<0.46",
+    # --- experiment tracking / registry (legacy stage API; <3 required) ---
+    "mlflow>=2.9,<3",
+    # --- AWS + data access ---
+    "boto3>=1.34,<2.0",
+    "awswrangler>=3.5,<4.0",   # Glue/Athena/S3 reads of the gold tables
+    "s3fs>=2024.2,<2025",
+    # --- config / utilities ---
+    "pydantic>=2.5,<3.0",
+    "pydantic-settings>=2.1,<3.0",
+    "python-dotenv>=1.0,<2.0",
+    "typer>=0.9,<1.0",
+    "rich>=13.7,<14.0",
+]
+
+[project.optional-dependencies]
+# ---------------------------------------------------------------------------
+# CLOUD / LINUX-ONLY GROUPS
+# ---------------------------------------------------------------------------
+# These run inside Docker images on AWS Batch (Linux x86_64) and EKS. They are
+# NOT constrained by macOS 11 -- do not install these on the laptop. CI and the
+# Dockerfiles install the relevant extra; `make setup` (local) installs core only.
+# ---------------------------------------------------------------------------
+
+# Serving layer (FastAPI API + Streamlit UI). Streamlit/altair pull newer
+# transitive deps that may want source builds on Big Sur, so they live here.
+serve = [
+    "fastapi>=0.110,<1.0",
+    "uvicorn[standard]>=0.27,<1.0",
+    "streamlit>=1.31,<2.0",
+    "requests>=2.31,<3.0",
+]
+
+# Orchestration on AWS Batch. Metaflow runs the training flow on spot EC2.
+orchestration = [
+    "metaflow>=2.11,<3.0",
+]
+
+# ML-specific drift / performance reporting. Deferrable phase; Linux job only.
+monitoring = [
+    "evidently>=0.4,<0.5",
+]
+
+# Convenience meta-extra for building the training/cloud image.
+cloud = [
+    "nyc-taxi-demand[serve,orchestration,monitoring]",
+]
+
+[dependency-groups]
+# uv dev group -- laptop-safe tooling, installed by `make setup`.
+dev = [
+    "pytest>=8.0,<9.0",
+    "pytest-cov>=4.1,<6.0",
+    "moto[s3,batch]>=5.0,<6.0",
+    "ruff>=0.3,<1.0",
+    "pre-commit>=3.6,<4.0",
+]
+
+[project.scripts]
+ntd = "nyc_taxi_demand.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/nyc_taxi_demand"]
+
+# ---------------------------------------------------------------------------
+# Tooling config
+# ---------------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "flows"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "SIM"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.ruff.lint.isort]
+known-first-party = ["nyc_taxi_demand"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    # Keep test output clean; the MLflow stage deprecation is intentional here.
+    "ignore:.*Model registry stages will be removed.*:FutureWarning",
+]
+
+[tool.coverage.run]
+source = ["src/nyc_taxi_demand"]
+branch = true

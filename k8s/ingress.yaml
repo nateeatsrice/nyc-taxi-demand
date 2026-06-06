@@ -1,0 +1,30 @@
+# ALB ingress. Requires the AWS Load Balancer Controller installed in the cluster
+# (it provisions the actual ALB from this Ingress). Routes:
+#   /          -> Streamlit UI
+#   /api       -> FastAPI service
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ntd-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/healthcheck-path: /_stcore/health
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: ntd-api
+                port: { number: 80 }
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ntd-ui
+                port: { number: 80 }

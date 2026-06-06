@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ntd-ui
+  namespace: default
+  labels: { app: ntd-ui }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: ntd-ui }
+  template:
+    metadata:
+      labels: { app: ntd-ui }
+    spec:
+      containers:
+        - name: ui
+          # TODO(you): set to <account>.dkr.ecr.<region>.amazonaws.com/nyc-taxi-demand:ui-<tag>
+          image: "<ECR_REPO_URL>:ui-latest"
+          ports:
+            - containerPort: 8501
+          env:
+            # Points the UI at the in-cluster API service.
+            - name: NTD_API_URL
+              value: "http://ntd-api.default.svc.cluster.local"
+          readinessProbe:
+            httpGet: { path: /_stcore/health, port: 8501 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits: { cpu: "500m", memory: "512Mi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ntd-ui
+  namespace: default
+spec:
+  selector: { app: ntd-ui }
+  ports:
+    - port: 80
+      targetPort: 8501
+  type: ClusterIP
