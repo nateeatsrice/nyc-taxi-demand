@@ -30,7 +30,11 @@ dependencies = [
     "scikit-learn>=1.4,<1.5",
     "xgboost>=2.0,<2.1",
     "lightgbm>=4.1,<4.4",
-    "shap>=0.44,<0.46",
+    # NOTE: shap is intentionally NOT here. It pulls numba -> llvmlite, whose last
+    # macOS-Intel wheel was 0.44.0; newer llvmlite is ARM-only on Mac and falls
+    # back to a CMake/LLVM source build that fails on Big Sur. SHAP runs in the
+    # training job (Linux/Docker) where it installs cleanly -- see the [explain]
+    # extra. evaluate.py degrades gracefully (tags shap_error) when it's absent.
     # --- experiment tracking / registry (legacy stage API; <3 required) ---
     "mlflow>=2.9,<3",
     # --- AWS + data access ---
@@ -73,9 +77,16 @@ monitoring = [
     "evidently>=0.4,<0.5",
 ]
 
+# Explainability. SHAP -> numba -> llvmlite has no macOS-Intel wheel past 0.44,
+# so it lives here and runs in the training image (Linux), not on the laptop.
+explain = [
+    "shap>=0.44,<0.46",
+    "matplotlib>=3.7,<4.0",
+]
+
 # Convenience meta-extra for building the training/cloud image.
 cloud = [
-    "nyc-taxi-demand[serve,orchestration,monitoring]",
+    "nyc-taxi-demand[serve,orchestration,monitoring,explain]",
 ]
 
 [dependency-groups]

@@ -13,8 +13,19 @@ appeared in 2024 releases, so capping by date would both over- and under-constra
 
 - **SciPy 1.13+ dropped old-macOS Intel wheels.** Pinned `scipy>=1.11,<1.13`.
 - This transitively caps **scikit-learn** (`>=1.4,<1.5`), which in turn fixes the
-  versions of xgboost / lightgbm / shap that resolve cleanly against it.
+  versions of xgboost / lightgbm that resolve cleanly against it.
 - **numpy** pinned `<2.0` for ABI compatibility with that scientific stack.
+
+## SHAP is cloud-only (not laptop-safe)
+
+SHAP pulls **numba → llvmlite**, and llvmlite's **last macOS-Intel wheel was
+0.44.0** — every newer release is ARM-only on Mac and falls back to a CMake/LLVM
+source build that fails on Big Sur (no `cmake`/LLVM toolchain). Rather than chase a
+fragile `numba<0.61` / `llvmlite<0.45` pin that may still lack a cp312 Intel wheel,
+SHAP lives in the **`explain` optional extra** and runs inside the training image
+(Linux), where it installs cleanly. `training/evaluate.py` wraps SHAP in try/except
+and tags `shap_error` if it's missing, so local training works fine without it —
+you just won't get the SHAP summary plot locally (you do in Batch).
 
 ## MLflow
 
@@ -33,8 +44,8 @@ enforced in `pyproject.toml`:
 
 - **Core `dependencies`** — laptop-safe; installed by `make setup`.
 - **Optional extras** — `serve` (FastAPI/Streamlit), `orchestration` (Metaflow),
-  `monitoring` (Evidently). These may need newer/source wheels and are installed
-  only in Dockerfiles / CI, never locally.
+  `monitoring` (Evidently), `explain` (SHAP/matplotlib). These may need newer or
+  source wheels and are installed only in Dockerfiles / CI, never locally.
 
 ## Before bumping any local pin
 

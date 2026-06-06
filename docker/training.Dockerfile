@@ -17,8 +17,9 @@ COPY pyproject.toml README.md ./
 COPY src ./src
 COPY flows ./flows
 
-# Install core + orchestration extra (training needs Metaflow; not serving/UI).
-RUN uv pip install --system --no-cache ".[orchestration]"
+# Install core + orchestration + explain (training needs Metaflow + SHAP;
+# SHAP installs cleanly here on Linux, unlike on the Big Sur laptop).
+RUN uv pip install --system --no-cache ".[orchestration,explain]"
 
 # Default: run the Metaflow training flow on Batch.
 ENTRYPOINT ["python", "flows/training_flow.py"]

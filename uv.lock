@@ -1321,7 +1321,6 @@ dependencies = [
     { name = "s3fs" },
     { name = "scikit-learn" },
     { name = "scipy" },
-    { name = "shap" },
     { name = "typer" },
     { name = "xgboost" },
 ]
@@ -1330,10 +1329,16 @@ dependencies = [
 cloud = [
     { name = "evidently" },
     { name = "fastapi" },
+    { name = "matplotlib" },
     { name = "metaflow" },
     { name = "requests" },
+    { name = "shap" },
     { name = "streamlit" },
     { name = "uvicorn", extra = ["standard"] },
+]
+explain = [
+    { name = "matplotlib" },
+    { name = "shap" },
 ]
 monitoring = [
     { name = "evidently" },
@@ -1364,10 +1369,11 @@ requires-dist = [
     { name = "evidently", marker = "extra == 'monitoring'", specifier = ">=0.4,<0.5" },
     { name = "fastapi", marker = "extra == 'serve'", specifier = ">=0.110,<1.0" },
     { name = "lightgbm", specifier = ">=4.1,<4.4" },
+    { name = "matplotlib", marker = "extra == 'explain'", specifier = ">=3.7,<4.0" },
     { name = "metaflow", marker = "extra == 'orchestration'", specifier = ">=2.11,<3.0" },
     { name = "mlflow", specifier = ">=2.9,<3" },
     { name = "numpy", specifier = ">=1.26,<2.0" },
-    { name = "nyc-taxi-demand", extras = ["serve", "orchestration", "monitoring"], marker = "extra == 'cloud'" },
+    { name = "nyc-taxi-demand", extras = ["serve", "orchestration", "monitoring", "explain"], marker = "extra == 'cloud'" },
     { name = "pandas", specifier = ">=2.1,<2.3" },
     { name = "pyarrow", specifier = ">=14,<16" },
     { name = "pydantic", specifier = ">=2.5,<3.0" },
@@ -1378,13 +1384,13 @@ requires-dist = [
     { name = "s3fs", specifier = ">=2024.2,<2025" },
     { name = "scikit-learn", specifier = ">=1.4,<1.5" },
     { name = "scipy", specifier = ">=1.11,<1.13" },
-    { name = "shap", specifier = ">=0.44,<0.46" },
+    { name = "shap", marker = "extra == 'explain'", specifier = ">=0.44,<0.46" },
     { name = "streamlit", marker = "extra == 'serve'", specifier = ">=1.31,<2.0" },
     { name = "typer", specifier = ">=0.9,<1.0" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'serve'", specifier = ">=0.27,<1.0" },
     { name = "xgboost", specifier = ">=2.0,<2.1" },
 ]
-provides-extras = ["serve", "orchestration", "monitoring", "cloud"]
+provides-extras = ["serve", "orchestration", "monitoring", "explain", "cloud"]
 
 [package.metadata.requires-dev]
 dev = [
