@@ -149,11 +149,3 @@ deps (Streamlit serving, Metaflow, Evidently) live in optional-dependency groups
 installed only in Docker/CI. MLflow is pinned `>=2.9,<3` because this repo
 intentionally uses the legacy stage-based registry API. Details and pin ceilings:
 `docs/dependency-pins.md`.
-
-## Future work (explicitly out of scope)
-
-- **Auth** on the API/UI (currently none — do not expose publicly as-is).
-- **Canary / A-B deploys** for model rollout.
-- **Feature store** (currently the shared transform module fills this role).
-- **Streaming / real-time** features and inference.
-- **Live weather-forecast provider** for batch inference (currently an explicit input).
